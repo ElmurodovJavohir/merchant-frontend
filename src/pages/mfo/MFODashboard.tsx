@@ -35,21 +35,16 @@ export default function MFODashboard() {
 
   useEffect(() => {
     Promise.all([
-      apiDashboard.mfo().catch(() => null),
-      apiApplications.list().catch(() => [] as Application[]),
-    ]).then(([d, apps]) => {
-      if (d) setStats({
+      apiDashboard.mfo().then(d => setStats({
         totalMerchants: d.totalMerchants,
         pendingApplications: d.pendingApplications,
         approvedThisMonth: d.approvedThisMonth,
         totalTurnover: d.totalTurnover,
         unpaidAmount: d.unpaidAmount,
         monthlyTrend: d.monthlyTrend,
-      })
-      setRecentApps(
-        [...apps].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).slice(0, 5)
-      )
-    }).finally(() => setLoading(false))
+      })),
+      apiApplications.list(1, 5).then(res => setRecentApps(res.items)),
+    ]).catch(() => {}).finally(() => setLoading(false))
   }, [])
 
   const revenueEstimate = recentApps

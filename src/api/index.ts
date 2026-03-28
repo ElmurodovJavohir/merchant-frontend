@@ -37,10 +37,18 @@ export const apiProducts = {
   remove: (id: string) => api.delete(`/api/v1/products/${id}`),
 }
 
+export interface PagedResponse<T> {
+  items: T[]
+  total: number
+  page: number
+  page_size: number
+  total_pages: number
+}
+
 export const apiApplications = {
-  list: () =>
-    api.get<any[]>('/api/v1/applications')
-      .then(r => r.data.map(normalizeApplication)),
+  list: (page = 1, pageSize = 10) =>
+    api.get<PagedResponse<any>>('/api/v1/applications', { params: { page, page_size: pageSize } })
+      .then(r => ({ ...r.data, items: r.data.items.map(normalizeApplication) })),
   get: (id: string) =>
     api.get<Application>(`/api/v1/applications/${id}/detail`).then(r => r.data),
   submit: (b: object) =>
@@ -49,14 +57,32 @@ export const apiApplications = {
   submitMulti: (b: object) =>
     api.post<MultiProductResponse>('/api/v1/applications/multi-product', b).then(r => r.data),
   confirm: (id: string, b: object) =>
-    api.patch<any>(`/api/v1/applications/${id}/confirm`, b)
+    api.post<any>(`/api/v1/applications/${id}/confirm`, b).then(r => r.data),
+  decide: (id: string, b: object) =>
+    api.patch<any>(`/api/v1/applications/${id}/decide`, b)
       .then(r => normalizeApplication(r.data)),
 }
 
 export const apiContracts = {
-  list: () => api.get<Contract[]>('/api/v1/contracts').then(r => r.data),
+  list: (page = 1, pageSize = 10) =>
+    api.get<PagedResponse<Contract>>('/api/v1/contracts', { params: { page, page_size: pageSize } })
+      .then(r => r.data),
   schedule: (id: string) =>
     api.get<Installment[]>(`/api/v1/contracts/${id}/schedule`).then(r => r.data),
+  downloadPdf: (id: string) => {
+    api.get(`/api/v1/contracts/${id}/pdf`, { responseType: 'blob' })
+      .then(res => {
+        const url = URL.createObjectURL(res.data)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `shartnoma-${id.slice(-8).toUpperCase()}.pdf`
+        document.body.appendChild(a)
+        a.click()
+        document.body.removeChild(a)
+        setTimeout(() => URL.revokeObjectURL(url), 100)
+      })
+      .catch(err => console.error('PDF download failed:', err))
+  },
   get: (id: string) =>
     api.get<Contract>(`/api/v1/contracts/${id}`).then(r => r.data),
 }

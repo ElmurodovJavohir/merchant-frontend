@@ -7,7 +7,7 @@ import FraudGateBadge from '../../components/ui/FraudGateBadge'
 import ScoreFactorBars from '../../components/ui/ScoreFactorBars'
 import ScoreGauge from '../../components/merchant/ScoreGauge'
 import { Application } from '../../types'
-import { apiApplications } from '../../api'
+import { apiApplications, apiContracts } from '../../api'
 import { formatUZS, maskPassport } from '../../utils/format'
 import { useTranslation } from 'react-i18next'
 import clsx from 'clsx'
@@ -36,14 +36,21 @@ export default function MFOApplications() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<TabFilter>('ALL')
   const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [search, setSearch] = useState('')
   const [detailApp, setDetailApp] = useState<Application | null>(null)
   const [detailTab, setDetailTab] = useState<DetailTab>('overview')
   const { t } = useTranslation()
 
   useEffect(() => {
-    apiApplications.list().then(setApplications).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+    setLoading(true)
+    apiApplications.list(page, PAGE_SIZE).then(res => {
+      setApplications(res.items)
+      setTotal(res.total)
+      setTotalPages(res.total_pages)
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [page])
 
   const openDetail = (app: Application) => {
     setDetailApp(app)
@@ -55,14 +62,13 @@ export default function MFOApplications() {
 
   const filtered = applications.filter(a => {
     const matchTab = tab === 'ALL' || a.status === tab
-    const matchSearch = !search || 
+    const matchSearch = !search ||
       a.client.fullName.toLowerCase().includes(search.toLowerCase()) ||
       a.client.passportNumber.toLowerCase().includes(search.toLowerCase()) ||
       a.merchantName.toLowerCase().includes(search.toLowerCase())
     return matchTab && matchSearch
   })
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const paginated = filtered
 
   const changeTab = (t: TabFilter) => { setTab(t); setPage(1) }
 
@@ -162,6 +168,19 @@ export default function MFOApplications() {
                   <td className="px-3 py-3"><FraudGateBadge gate={app.fraudGate} /></td>
                   <td className="px-3 py-3">{statusBadge(app.status)}</td>
                   <td className="px-3 py-3 text-xs text-gray-500 whitespace-nowrap">{app.createdAt?.split('T')[0]}</td>
+                  {app.contractId && (
+                    <td className="px-3 py-3" onClick={e => e.stopPropagation()}>
+                      <button
+                        onClick={() => apiContracts.downloadPdf(app.contractId!)}
+                        className="flex items-center gap-1 rounded-lg bg-blue-50 px-2 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                        </svg>
+                        PDF
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -173,7 +192,7 @@ export default function MFOApplications() {
       {totalPages > 1 && (
         <div className="flex items-center justify-between px-1">
           <p className="text-sm text-gray-500">
-            {t('common.showing', { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, filtered.length), total: filtered.length })}
+            {t('common.showing', { from: (page - 1) * PAGE_SIZE + 1, to: Math.min(page * PAGE_SIZE, total), total })}
           </p>
           <div className="flex items-center gap-1">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}

@@ -15,17 +15,28 @@ function formatUZS(n: number): string {
   return n.toLocaleString() + ' UZS'
 }
 
+const PAGE_SIZE = 10
+
 export default function MerchantInstallments() {
   const { t } = useTranslation()
   const [contracts, setContracts] = useState<Contract[]>([])
   const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(1)
+  const [total, setTotal] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [scheduleContract, setScheduleContract] = useState<Contract | null>(null)
   const [schedule, setSchedule] = useState<Installment[]>([])
   const [loadingSchedule, setLoadingSchedule] = useState(false)
 
   useEffect(() => {
-    apiContracts.list().then(setContracts).catch(() => {}).finally(() => setLoading(false))
-  }, [])
+    apiContracts.list(page, PAGE_SIZE).then(res => {
+      setContracts(res.items)
+      setTotal(res.total)
+      setTotalPages(res.total_pages)
+    }).catch(() => {}).finally(() => setLoading(false))
+  }, [page])
+
+  const paginated = contracts
 
   const openSchedule = (contract: Contract) => {
     setScheduleContract(contract)
@@ -103,7 +114,7 @@ export default function MerchantInstallments() {
                     {t('installments.noContracts')}
                   </td>
                 </tr>
-              ) : contracts.map(contract => {
+              ) : paginated.map(contract => {
                 const progress = Math.round((contract.paidInstallments / contract.months) * 100)
                 return (
                   <tr key={contract.id} className="hover:bg-gray-50 transition-colors">
@@ -139,12 +150,23 @@ export default function MerchantInstallments() {
                     </td>
                     <td className="px-4 py-4">{statusBadge(contract.status)}</td>
                     <td className="px-4 py-4">
-                      <button
-                        onClick={() => openSchedule(contract)}
-                        className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
-                      >
-                        {t('installments.viewSchedule')}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => openSchedule(contract)}
+                          className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                          {t('installments.viewSchedule')}
+                        </button>
+                        <button
+                          onClick={() => apiContracts.downloadPdf(contract.id)}
+                          className="flex items-center gap-1 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-700 hover:bg-emerald-100 transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3M3 17V7a2 2 0 012-2h6l2 2h4a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z" />
+                          </svg>
+                          PDF
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 )
@@ -153,6 +175,55 @@ export default function MerchantInstallments() {
           </table>
         </div>
       </div>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between px-1">
+          <p className="text-sm text-gray-500">
+            Showing {(page - 1) * PAGE_SIZE + 1}–{Math.min(page * PAGE_SIZE, total)} of {total}
+          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Previous
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1)
+              .filter(n => n === 1 || n === totalPages || Math.abs(n - page) <= 1)
+              .reduce<(number | '…')[]>((acc, n, idx, arr) => {
+                if (idx > 0 && n - (arr[idx - 1] as number) > 1) acc.push('…')
+                acc.push(n)
+                return acc
+              }, [])
+              .map((n, i) =>
+                n === '…' ? (
+                  <span key={`ellipsis-${i}`} className="px-2 text-gray-400 text-sm">…</span>
+                ) : (
+                  <button
+                    key={n}
+                    onClick={() => setPage(n as number)}
+                    className={clsx(
+                      'rounded-lg px-3 py-1.5 text-sm font-medium',
+                      page === n
+                        ? 'bg-blue-600 text-white'
+                        : 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                    )}
+                  >
+                    {n}
+                  </button>
+                )
+              )}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="rounded-lg border border-gray-200 px-3 py-1.5 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              Next
+            </button>
+          </div>
+        </div>
+      )}
 
       <Modal
         open={!!scheduleContract}

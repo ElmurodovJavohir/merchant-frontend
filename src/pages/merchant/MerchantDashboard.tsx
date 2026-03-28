@@ -16,6 +16,8 @@ function formatUZS(n: number): string {
   return n.toLocaleString() + ' UZS'
 }
 
+const CONTRACTS_PAGE_SIZE = 5
+
 export default function MerchantDashboard() {
   const { t } = useTranslation()
   const { user } = useAuthStore()
@@ -24,18 +26,22 @@ export default function MerchantDashboard() {
   const [contracts, setContracts] = useState<Contract[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [loading, setLoading] = useState(true)
+  const [contractPage, setContractPage] = useState(1)
 
   useEffect(() => {
     Promise.all([
-      apiApplications.list().catch(() => [] as Application[]),
-      apiContracts.list().catch(() => [] as Contract[]),
-      apiProducts.list().catch(() => [] as Product[]),
-    ]).then(([apps, conts, prods]) => {
-      setApplications(apps)
-      setContracts(conts)
+      apiApplications.list(1, 100),
+      apiContracts.list(1, 100),
+      apiProducts.list(),
+    ]).then(([appsPage, ctrsPage, prods]) => {
+      setApplications(appsPage.items)
+      setContracts(ctrsPage.items)
       setProducts(prods)
-    }).finally(() => setLoading(false))
+    }).catch(() => {}).finally(() => setLoading(false))
   }, [])
+
+  const contractTotalPages = Math.max(1, Math.ceil(contracts.length / CONTRACTS_PAGE_SIZE))
+  const paginatedContracts = contracts.slice((contractPage - 1) * CONTRACTS_PAGE_SIZE, contractPage * CONTRACTS_PAGE_SIZE)
 
   const activeInstallments = contracts.filter(c => c.status === 'ACTIVE').length
   const pendingApps = applications.filter(a => a.status === 'PENDING').length
@@ -161,6 +167,30 @@ export default function MerchantDashboard() {
               </div>
             ))}
           </div>
+          {contractTotalPages > 1 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100">
+              <p className="text-xs text-gray-400">
+                {(contractPage - 1) * CONTRACTS_PAGE_SIZE + 1}–{Math.min(contractPage * CONTRACTS_PAGE_SIZE, contracts.length)} of {contracts.length}
+              </p>
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setContractPage(p => Math.max(1, p - 1))}
+                  disabled={contractPage === 1}
+                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                <span className="flex items-center px-2 text-xs text-gray-500">{contractPage} / {contractTotalPages}</span>
+                <button
+                  onClick={() => setContractPage(p => Math.min(contractTotalPages, p + 1))}
+                  disabled={contractPage === contractTotalPages}
+                  className="rounded-lg border border-gray-200 px-2.5 py-1 text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
